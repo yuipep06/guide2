@@ -1,1 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<title>Route Guide</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #f7f5f0;
+  font-family: sans-serif;
+  overflow: hidden;
+}
+
+.container {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.swiper {
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  background: #f7f5f0;
+}
+
+.swiper-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.counter {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #333;
+  background: rgba(0,0,0,0.04);
+}
+
+.caption-bar {
+  padding: 10px 14px;
+  font-size: 16px;
+  line-height: 1.4;
+  background: rgba(255,255,255,0.95);
+  border-top: 1px solid rgba(0,0,0,0.08);
+  width: 100%;
+  box-sizing: border-box;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.nav-arrow {
+  position: absolute;
+  top: 45%;
+  transform: translateY(-50%);
+  font-size: 42px;
+  color: #c7a86b;
+  z-index: 999;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-arrow.left { left: 10px; }
+.nav-arrow.right { right: 10px; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- PHOTO -->
+  <div class="swiper">
+    <div class="swiper-wrapper" id="slides"></div>
+
+    <div class="nav-arrow left" id="prev">‹</div>
+    <div class="nav-arrow right" id="next">›</div>
+  </div>
+
+  <!-- COUNTER -->
+  <div class="counter" id="counter">- / -</div>
+
+  <!-- CAPTION -->
+  <div class="caption-bar" id="caption">Loading...</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+
+<script>
+let captions = [];
+let swiper = null;
+
+const slides = document.getElementById('slides');
+const captionEl = document.getElementById('caption');
+const counterEl = document.getElementById('counter');
+
+/* UI update */
+function updateUI(i) {
+  captionEl.textContent = captions[i] ?? "";
+  counterEl.textContent = `${i + 1} / ${captions.length || 0}`;
+}
+
+/* 画像ロード（キャッシュ対策付き） */
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+
+    img.src = src + '?v=' + Date.now(); // キャッシュ回避
+
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      console.warn("画像読み込み失敗:", src);
+      resolve(null);
+    };
+  });
+}
+
+/* スライド生成（画像ロード待ち） */
+async function buildSlides(len) {
+  slides.innerHTML = "";
+
+  const promises = [];
+
+  for (let i = 1; i <= len; i++) {
+    promises.push(loadImage(`root${i}.jpg`));
+  }
+
+  const images = await Promise.all(promises);
+
+  images.forEach((img) => {
+    const slide = document.createElement('div');
+    slide.className = 'swiper-slide';
+
+    if (img) {
+      img.className = 'photo';
+      slide.appendChild(img);
+    } else {
+      slide.textContent = "画像読み込み失敗";
+    }
+
+    slides.appendChild(slide);
+  });
+}
+
+/* Swiper初期化 */
+function initSwiper() {
+
+  if (swiper) swiper.destroy(true, true);
+
+  swiper = new Swiper('.swiper', {
+    loop: false,
+    centeredSlides: true,
+    slidesPerView: 1,
+    observer: true,
+    observeParents: true,
+
+    on: {
+      init: function () {
+        updateUI(this.realIndex);
+      },
+      slideChange: function () {
+        updateUI(this.realIndex);
+      }
+    }
+  });
+
+  document.getElementById('prev').onclick = () => swiper.slidePrev();
+  document.getElementById('next').onclick = () => swiper.slideNext();
+}
+
+/* JSON読み込み */
+fetch('captions.json?v=' + Date.now()) // キャッシュ対策
+  .then(res => res.json())
+  .then(async data => {
+
+    captions = Array.isArray(data) ? data : [];
+
+    await buildSlides(captions.length); // ←超重要
+
+    initSwiper();
+
+    updateUI(0);
+  })
+  .catch(err => {
+    console.error("JSON読み込みエラー:", err);
+    captionEl.textContent = "読み込みエラー";
+  });
+</script>
+
+</body>
+</html>
